@@ -137,6 +137,7 @@ void vk_exec_inline_end(int reopen);
 // vk_exec_draw.c: forget what the command buffer being recorded has bound (pipeline, sets, dynamic state, vertex
 // buffers): the replay continues in a new one (vk_sync_split).
 void vk_exec_draw_new_cb(void);
+void vk_exec_pool_part_queued(const VkExec *ex);   // vk_exec_draw.c: a part that may bind the pool set goes to the queue
 // vk_exec_draw.c: the vertex and fragment shader of the last draw recorded into this command buffer (NULL: none yet).
 void vk_exec_draw_shaders(const GfxShader **vs, const GfxShader **fs);
 VkBuffer vk_exec_inline_buffer(VkDeviceSize size);

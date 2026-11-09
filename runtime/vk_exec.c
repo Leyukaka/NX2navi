@@ -925,6 +925,7 @@ static void maybe_split(VkExec *ex) {
     if (idle && ex->recorded != part_start) n_idle_parts++;
     if (ex->recorded == part_start) return;
     if (ex->in_pass) vk_exec_pass_end(ex), n_pass_splits++;   // the next draw begins the pass again, in the new part
+    vk_exec_pool_part_queued(ex);
     ex->cb = vk_sync_split();
     part_start = ex->recorded;
     part_t0 = kern_now_ns();

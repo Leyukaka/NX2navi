@@ -1715,6 +1715,7 @@ static struct {
     uint64_t set_synced[POOL_SETS];    // the change-log position up to which it holds every write
     int nsets, cur, all;               // all: the first fill, written to every set
     uint64_t cur_fence;                // the submission sets[cur] serves
+    uint64_t queued_fence;             // a part of that submission is on the queue: sets[cur] takes no more writes
     uint32_t *log;                     // POOL_LOG entries
     uint64_t logn;                     // writes so far
     uint64_t *last;                    // per entry: the log position of its newest write (catch-up writes it once, there)
@@ -2007,6 +2008,11 @@ static void pool_sync(VkExec *ex) {
     if (!PL.layout) vk_pool_set_layout();
     uint64_t from = 0, pre = PL.logn;
     int switched = pool_take_set(ex, &from);   // every submission its own set, before the shortcut
+    // The set is created UPDATE_UNUSED_WHILE_PENDING: an entry a pending command buffer may read must not change. Once
+    // a part of this submission is queued (vk_exec_pool_part_queued), its draws may read any entry, so the slots that
+    // change go to the next submission's set (pool_catch_up). Written here, a queued part read an image made after it
+    // was submitted: device lost with a read fault inside a new block, at area loads (issues #177, #257).
+    if (!switched && PL.queued_fence == ex->fence) return;
     uint64_t t0 = kern_now_ns();
     pool_sync_entries(ex);
     uint64_t t1 = kern_now_ns();
@@ -2032,6 +2038,10 @@ static void pool_dirty_slot(int id, void *arg) {   // vk_texture_dirty_slots_loc
     else PL.n_by_addr++;
     if (pool_fill(d->ex, (uint32_t)id, d->used, t)) PL.tok[id] = t;
     else d->retry = 1;
+}
+
+void vk_exec_pool_part_queued(const VkExec *ex) {
+    if (PL.cur_fence == ex->fence) PL.queued_fence = ex->fence;
 }
 
 static void pool_sync_entries(VkExec *ex) {
