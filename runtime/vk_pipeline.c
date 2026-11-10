@@ -529,13 +529,13 @@ static volatile uint32_t cache_merges;
 // A save is waiting for cache_rw (cache_save, autosave_once): while it is above 0, the builds no draw waits for hold
 // back their next create into P.cache (pipe_create_in), so the builds running drain and the copy finds its moment.
 // Without it the background queue (the pipelines the boot left, the optimised builds after each fast link, the boot's
-// library prebuild) kept a build running at every try: a 25-minute 0.7.1 session on an RTX 5080 never wrote
+// library prebuild, the library warm) kept a build running at every try: a 25-minute 0.7.1 session on an RTX 5080 never wrote
 // pipeline-cache.bin, not at an autosave nor at exit, and the next start compiled the same pipelines again. Draws, the
 // replay thread and the jobs a draw waits for never wait here.
 static volatile int32_t save_gate;
 // Set while this thread's build is one no draw waits for: the low flag of the job pipe_worker runs (promote clears it
 // when a draw comes to wait, and the create then goes ahead), or yields_always on a boot library prebuild thread
-// (lb_worker). Its creates into P.cache wait while save_gate is up.
+// (lb_worker) and a library warm thread (lw_worker). Its creates into P.cache wait while save_gate is up.
 static __thread const volatile uint8_t *build_yields;
 static const uint8_t yields_always = 1;
 // How long a background create holds back for a save at most: the save lowers the gate when it is done or gives up, so
@@ -5487,6 +5487,7 @@ static double lw_build(const GfxWarmEnt *e) {
 
 static void lw_worker(void *arg) {
     (void)arg;
+    build_yields = &yields_always;   // the warm steps aside for a save (save_gate)
     plat_thread_priority(PLAT_PRIO_IDLE);
     for (;;) {
         size_t i = (size_t)plat_inc64(&LW.next) - 1;
