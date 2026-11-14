@@ -18,10 +18,18 @@ int vk_xess_device_exts(VkInstance inst, VkPhysicalDevice phys, const VkExtensio
 // Appends XeSS's feature chain to *tail, the pNext slot of the last structure in the chain (XeSS patches the chain it is
 // given, so nothing of the runtime may follow it). 1 when the device has what XeSS asks for.
 int vk_xess_device_features(VkInstance inst, VkPhysicalDevice phys, void **tail);
+// One image XeSS reads or writes, with a view the caller keeps alive for as long as the image lives: the replay's target
+// views (vk_exec_target_view, purged when the image is destroyed) and vk_dlaa.c's own views of its images. XeSS keeps no
+// views of its own, since an image destroyed and another made at the same handle would find the old image's view.
+typedef struct VkXessImage {
+    VkImage image;
+    VkImageView view;
+    VkFormat format;
+} VkXessImage;
 // Records XeSS into cb: color (the scene light, render size), depth (D32F, not inverted), mv (R16G16F, render pixels,
 // current to previous), out (the output size, RGBA16F, storage). jx, jy: the jitter the scene took, render pixels.
 // 0 on failure (the caller falls back as it does when FSR 3.1 fails).
-int vk_xess_upscale(VkCommandBuffer cb, VkImage color, VkFormat color_format, VkImage depth, VkFormat depth_format,
-                    VkImage mv, VkImage out, uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, float jx, float jy,
+int vk_xess_upscale(VkCommandBuffer cb, const VkXessImage *color, const VkXessImage *depth, const VkXessImage *mv,
+                    const VkXessImage *out, uint32_t w, uint32_t h, uint32_t ow, uint32_t oh, float jx, float jy,
                     int reset);
 void vk_xess_release(void);   // before the device goes away

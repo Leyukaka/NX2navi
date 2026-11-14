@@ -1665,8 +1665,12 @@ static void evaluate(VkExec *ex, const VkExecTarget *dst) {
     if (xess) {   // Intel XeSS (vk_xess.cpp) in DLSS's place: the same images, then the same blit below
         if (t->level || t->base_layer || z->level || z->base_layer) return dl_fail("XeSS on a target that is not level 0, layer 0", 0);
         if (D.last_color != t->image) target_changed(t);
-        if (!vk_xess_upscale(cb, t->image, t->format, z->image, z->format, e->mv, e->out, w, h, ow, oh, jx, jy, D.reset))
-            return dl_fail("XeSS", 0);
+        // the replay's views of its targets (purged with the image) and this size's own views: XeSS keeps none
+        const VkXessImage xc = {t->image, cv, t->format}, xz = {z->image, zv, z->format},
+                          xm = {e->mv, e->mv_view, VK_FORMAT_R16G16_SFLOAT},
+                          xo = {e->out, e->out_view, VK_FORMAT_R16G16B16A16_SFLOAT};
+        if (!cv || !zv) return dl_fail("XeSS without a view of the scene or its depth", 0);
+        if (!vk_xess_upscale(cb, &xc, &xz, &xm, &xo, w, h, ow, oh, jx, jy, D.reset)) return dl_fail("XeSS", 0);
         static int told;
         if (!told++) rt_log("dlaa: XeSS at %ux%u -> %ux%u (scene format %d, depth format %d)", w, h, ow, oh,
                             (int)t->format, (int)z->format);
