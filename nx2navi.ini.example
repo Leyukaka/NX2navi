@@ -1000,6 +1000,11 @@
 # Each walk holds the address-space lock for 100-240 ms and delays the next frame by as much, so they are off unless
 # asked for.
 # mem_census = 0
+# 1: with trace = perf, on an integrated GPU (memory in import mode), counts at every submission what a video
+# memory copy of the buffers would have to upload (the "mem: dirty" lines). The count queries every such buffer at
+# every submission on the replay's own thread and costs it several ms a frame (14.6 ms a frame on an Intel Arc
+# B390 laptop), so it is off unless asked for.
+# dirty_census = 0
 # The memory the game is taken to need, in MB of commit (RAM plus page file not yet promised to a program). When less
 # is free at the start, the log gets a warning line: short of memory the game stutters, loses textures or stops with
 # an out-of-memory or lost-device error. The default is what the game took in play at 3840x2160 on an RTX 5090; the

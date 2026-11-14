@@ -1486,7 +1486,7 @@ void vk_mem_snap_stats(uint64_t *checks, uint64_t *calls, uint64_t *untracked) {
     *untracked = __atomic_exchange_n(&n_snap_untracked, 0, __ATOMIC_RELAXED);
 }
 
-// ---------------------------------------------------------------- dirty census (NX2NAVI_TRACE=perf)
+// ---------------------------------------------------------------- dirty census (NX2NAVI_TRACE=perf, NX2NAVI_DIRTY_CENSUS)
 // What a device-local mirror of the buffer-bound pools would upload. The replay notes every
 // imported pool it binds as a vertex, index, uniform, storage or indirect buffer (vk_mem_bound_note). At the start of
 // each submit one write-watch query per run of such pools stamps the pages written since with a new generation, in the
@@ -1496,6 +1496,17 @@ void vk_mem_snap_stats(uint64_t *checks, uint64_t *calls, uint64_t *untracked) {
 // - lazy: pages stamped after the pool's previous count, in pools the previous submit bound (upload when bound);
 // - first use: the size of a pool the first time it is bound (a mirror copies the whole pool then).
 // Classes: CPU_CACHED, CPU_UNCACHED, other (CPU_NO_ACCESS). Logged as `mem: dirty` every 60 frames.
+// It runs in import mode only, and only when NX2NAVI_DIRTY_CENSUS=1 (dirty_census = 1) is set beside trace = perf: the
+// scan queries every buffer-bound pool at every submit, frozen regions included, on the replay thread under the submit
+// lock and with gen_lock held, so it is a cost of the frame itself. An Arc B390 laptop (integrated GPU, import mode)
+// spent 14.6 ms of a 31.6 ms frame on it, 847 queries a frame ("cost: queries_per_frame 847.0 scan_ms_per_frame
+// 14.602"), and its player lost about 10 fps when asked to turn trace = perf on for a report; a 16-core desktop in
+// import mode spent 7.0 ms a frame. trace = perf is what players are asked for, so the census no longer comes with it.
+static int dirty_census(void) {
+    static int on = -1;
+    if (on < 0) on = cfg_bool("NX2NAVI_DIRTY_CENSUS");
+    return on;
+}
 #define DIRTY_UNSYNCED UINT32_MAX
 #define DIRTY_GAP 0x100000ull   // pools closer than this share one query (the gap's pages are stamped too)
 #define DIRTY_WIN 60
@@ -2258,7 +2269,8 @@ static void shadow_log(uint64_t frame) {
 }
 
 void vk_mem_dirty_submit(void) {
-    if (!(rt_trace & RT_TRACE_PERF) || vk_mirror_on) return;   // the mirror's own line replaces the census
+    // the mirror's own line replaces the census; without NX2NAVI_DIRTY_CENSUS it is not taken (see above)
+    if (!(rt_trace & RT_TRACE_PERF) || vk_mirror_on || !dirty_census()) return;
     uint64_t t0 = kern_now_ns();
     uint32_t prev = dirty_sub;   // the submit whose replay noted the bindings
     dirty_sub = prev + 1 ? prev + 1 : 1;
@@ -2336,6 +2348,13 @@ void vk_mem_dirty_submit(void) {
 }
 
 static void dirty_frame(uint64_t frame) {
+    if (!dirty_census()) {
+        static int told;
+        if (!told++)
+            rt_log("mem: the dirty census (what a VRAM mirror would upload, \"mem: dirty\" lines) is off: it costs the "
+                   "replay several ms a frame in import mode; dirty_census = 1 under [diagnostics] turns it on");
+        return;
+    }
     plat_mutex_lock(&dirty_lock);
     if (dwin.frames < DIRTY_WIN)
         for (int k = 0; k < DC_N; k++) dwin_kib[dwin.frames][k] = (uint32_t)(dfr.eager[k] >> 10);
