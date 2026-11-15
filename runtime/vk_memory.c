@@ -1500,8 +1500,8 @@ void vk_mem_snap_stats(uint64_t *checks, uint64_t *calls, uint64_t *untracked) {
 // scan queries every buffer-bound pool at every submit, frozen regions included, on the replay thread under the submit
 // lock and with gen_lock held, so it is a cost of the frame itself. An Arc B390 laptop (integrated GPU, import mode)
 // spent 14.6 ms of a 31.6 ms frame on it, 847 queries a frame ("cost: queries_per_frame 847.0 scan_ms_per_frame
-// 14.602"), and its player lost about 10 fps when asked to turn trace = perf on for a report; a 16-core desktop in
-// import mode spent 7.0 ms a frame. trace = perf is what players are asked for, so the census no longer comes with it.
+// 14.602"), serial with a 13.7 ms replay while the GPU idled 16.5 ms; a 16-core desktop held to import mode spent
+// 7.0 ms a frame. trace = perf is what players are asked for, so the census no longer comes with it.
 static int dirty_census(void) {
     static int on = -1;
     if (on < 0) on = cfg_bool("NX2NAVI_DIRTY_CENSUS");
